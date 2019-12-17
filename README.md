@@ -9,8 +9,8 @@ Downloaded from GBIF as a .csv and filtered as per requirements. We've cleaned d
 We have scirpts for direct downloads and processing of global covariate data
 
 
-# ------------------------
-# TO BE RESOLVED:
+## ------------------------
+## TO BE RESOLVED:
 1. Use tile 29 data for model building and vn data for prediction...
 Probably not when the analysis become global because in that case we will have to use country + tile data for every region..
 Maybe an option for species with less records when fittign models to regional subsets?
@@ -26,8 +26,8 @@ LATER: not quite right yet
 
 4.Move species occurrence points falling off the mask to nearest 'land' cells
 We lose data again i.e. number of unique locations is reduced. This can be problematic for ppms...
-  # nrow(unique(outside_pts))
-  # nrow(unique(land))
+-- nrow(unique(outside_pts))
+-- nrow(unique(land))
   
   
 5. Extract covariates for presence points
