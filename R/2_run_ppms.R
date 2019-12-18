@@ -229,7 +229,7 @@ fit_ppms_apply <- function(i, spdat, bkdat, bkwts, interaction_terms, ppm_terms,
 spdat <- as.data.frame(occdat)
 bkdat <- backxyz200k
 bkwts <- bkgrd_wts
-spp <- levels(factor(spdat$species))[1:2]
+spp <- levels(factor(spdat$species)) ## subset here to run for fewer species
 mc.cores <- 1
 seq_along(spp)
 ppm_models <- parallel::mclapply(1:length(spp), fit_ppms_apply, spdat, #spwts,
