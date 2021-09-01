@@ -8,12 +8,13 @@ gc()
 
 setwd("./ppm_example/")
 
-x <- c('sp', 'raster', 'spatstat.data', 'nlme', 'rpart', 'spatstat', 'ppmlasso', 
+x <- c('data.table', 'sp', 'raster', 
+       'spatstat.data', 'nlme', 'rpart', 'spatstat', 'ppmlasso', 
        'parallel', 'doParallel', 'doMC')
 lapply(x, require, character.only = TRUE)
 
 data_path <- "./data/" ## copy data provided into this folder
-output_path <- "./ouput/" 
+output_path <- "./output/" 
 if(!dir.exists("./output")) {
   dir.create("./output")
 }
@@ -23,45 +24,45 @@ source("./R/0_functions.R")
 
 ## Load data ####
 ## Covariate data
-cov_mod <- readRDS(file.path(data_path, "covs_model.rds"))
-cov_pred <- readRDS(file.path(data_path,"covs_predict.rds"))
+cov.mod <- readRDS(file.path(data_path, "covs_model.rds"))
+cov.pred <- readRDS(file.path(data_path,"covs_predict.rds"))
 
 ## Biodiversity data
 ##  see README.md for data cleaning notes
 occdat <- readRDS(file.path(data_path, "occ_vn.rds"))
 
 ## Mask
-reg_mask <- readRDS(file.path(data_path, "mask_vn.rds"))
+reg.mask <- readRDS(file.path(data_path, "mask_vn.rds"))
 
 ## Find min non-NA set values across mask and covariates and sync NAs
 ##  see 0_functions.R
-reg_mask <- align.maskNA(cov_mod, reg_mask)
-reg_mask <- align.maskNA(cov_pred, reg_mask)
-cov_mod <- mask(cov_mod, reg_mask)
-cov_pred <- mask(cov_pred, reg_mask)
+reg.mask <- align.maskNA(cov.mod, reg.mask)
+reg.mask <- align.maskNA(cov.pred, reg.mask)
+cov.mod <- mask(cov.mod, reg.mask)
+cov.pred <- mask(cov.pred, reg.mask)
 
 
 ## Quadrature (background) points
-reg_mask0 <- reg_mask
-reg_mask0[which(is.na(reg_mask0[]))] <- 0
-rpts <- rasterToPoints(reg_mask0, spatial=TRUE)
+reg.mask0 <- reg.mask
+reg.mask0[which(is.na(reg.mask0[]))] <- 0
+rpts <- rasterToPoints(reg.mask0, spatial=TRUE)
 backxyz <- data.frame(rpts@data, X=coordinates(rpts)[,1], Y=coordinates(rpts)[,2])     
 backxyz <- backxyz[,-1]
-backxyz <- na.omit(cbind(backxyz, as.matrix(cov_mod)))
+backxyz <- na.omit(cbind(backxyz, as.matrix(cov.mod)))
 backxyz200k <- backxyz[sample(nrow(backxyz), 200000), ]
 backxyz200k$Pres <- rep(0, dim(backxyz200k)[1])
 
 ## Checks
-summary(cov_mod)
+summary(cov.mod)
 summary(backxyz200k)
-plot(reg_mask0, legend = FALSE)
+plot(reg.mask0, legend = FALSE)
 plot(rasterFromXYZ(backxyz200k[,1:3]), col = "black", add = TRUE, legend=FALSE)
 
 
 ## Prediction points ####
 predxyz <- data.frame(rpts@data, X=coordinates(rpts)[,1], Y=coordinates(rpts)[,2])     
 predxyz <- predxyz[,-1]
-predxyz <- na.omit(cbind(predxyz, as.matrix(cov_pred)))
+predxyz <- na.omit(cbind(predxyz, as.matrix(cov.pred)))
 
 
 ## Define model parameters ####
@@ -77,8 +78,8 @@ lambdaseq <- round(sort(exp(seq(-10, log(100 + 1e-05), length.out = 20)),
 
 ## Estimate weights for background points
 ## calculate the area of the globe and then work out the weights based on the total area divided by number of points
-ar <- raster::area(reg_mask0)
-ar <- mask(ar,reg_mask)
+ar <- raster::area(reg.mask0)
+ar <- mask(ar,reg.mask)
 totarea <- cellStats(ar,'sum')*1000 ## in meters^2
 area_offset <- extract(ar, backxyz200k[,c('X','Y')], small = TRUE, fun = mean, na.rm = TRUE)*1000 ## in meters
 bkgrd_wts <- c(totarea/area_offset)
@@ -113,17 +114,17 @@ fit_ppms_apply <- function(i, spdat, bkdat, bkwts, interaction_terms, ppm_terms,
   names(spxy) <- c("X", "Y")
   
   # ## Check if points fall outside the mask
-  plot(reg_mask)
+  plot(reg.mask)
   points(spxy)
   
   ## Move species occurrence points falling off the mask to nearest 'land' cells
   ## find points which fall in NA areas on the raster
-  vals <- extract(reg_mask, spxy)
+  vals <- extract(reg.mask, spxy)
   outside_mask <- is.na(vals)
   if(sum(outside_mask) > 0){
     outside_pts <- spxy[outside_mask, ]
     ## find the nearest land within 5 decimal degrees of these
-    land <- nearestLand(outside_pts, reg_mask, 1000000)
+    land <- nearestLand(outside_pts, reg.mask, 1000000)
     ## replace points falling in NA with new points on nearest land
     spxy[outside_mask, ] <- land
     ## count how many were moved
@@ -137,15 +138,15 @@ fit_ppms_apply <- function(i, spdat, bkdat, bkwts, interaction_terms, ppm_terms,
   ## Extract covariates for presence points
   ## For landuse: Take the non-NA value at shortest distance from point
   ## -- takes very logn to run; find alternative
-  r = cov_mod[[1]] ## landuse raster
+  r = cov.mod[[1]] ## landuse raster
   spxy_landuse <- apply(X = spxy, MARGIN = 1, FUN = function(X) r@data@values[which.min(replace(distanceFromPoints(r, X), is.na(r), NA))])
   ## spxy_landuse <- extract(r, spxy, method='simple', na.rm=TRUE, factor = TRUE) still gives NAs...
   # ## Check: Compare if non-NA values match with extract()
-  # spxy_landuse_extract <- extract(cov_mod[[1]], spxy, method = 'simple') ## gives NAs
+  # spxy_landuse_extract <- extract(cov.mod[[1]], spxy, method = 'simple') ## gives NAs
   # spxy_landuse_extract[which(!is.na(spxy_landuse_extract))] == spxy_landuse[which(!is.na(spxy_landuse_extract))]
   
   ## For other covariates: extract() using buffer
-  spxyz <- extract(cov_mod[[-1]], spxy, buffer = 1000000, small = TRUE, 
+  spxyz <- extract(cov.mod[[-1]], spxy, buffer = 1000000, small = TRUE, 
                    fun = mean, na.rm = TRUE)
   
   spxyz <- cbind(spxy, spxy_landuse, spxyz)
