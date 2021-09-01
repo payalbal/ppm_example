@@ -6,6 +6,8 @@ gc()
 # system("ps")
 # system("pkill -f R")
 
+setwd("./example_ppms_global")
+
 x <- c('data.table', 'sp', 'raster', 
        'sense', 'tools', 'bitops', 'RCurl', 
        'rgdal', 'gdalUtils', 'usethis', 'rgeos',
@@ -15,7 +17,7 @@ rm(x)
 
 ## Folder paths
 data_dir <- "./data"
-output_dir <- file.path(data_dir, "outputs")
+output_dir <- file.path(data_dir, "output")
 if(!dir.exists(output_dir)) {
   dir.create(output_dir)
 }
@@ -26,7 +28,7 @@ source("./gdal_calc.R")
 
 
 ## Prepare data ####
-## You can ignore this part as it is mainly data processing and skip to line 121
+## You can ignore this part as it is mainly data processing and skip to PPMs (line 123)
 ## This is probably what takes most time for global analyses :) 
 ## so I've left some useful gdal processingn scripts in 
 ## (we can chat about this when relevant)
@@ -143,7 +145,7 @@ rpts <- rasterToPoints(global.mask, spatial=TRUE)
 backxyz <- data.frame(rpts@data, X=coordinates(rpts)[,1], Y=coordinates(rpts)[,2])     
 backxyz <- backxyz[,-1]
 backxyz <- na.omit(cbind(backxyz, as.matrix(cov.mod)))
-backxyz200k <- backxyz[sample(nrow(backxyz), 200000), ]
+backxyz200k <- backxyz[sample(nrow(backxyz), 100000), ]
 backxyz200k$Pres <- rep(0, dim(backxyz200k)[1])
 
 ## Checks
@@ -209,11 +211,11 @@ bkwts = bkgrd_wts ## background points weights
 n.fits = 10
 min.obs = 50
 
-i = 1 
+i = 1 ## index for species
 
 ## Initialise log file
 ## Not necessary but this is handy if you're doing this for a lot of species
-## If you don't want to use this, comment out lines 289-294
+## If you don't want to use this, comment out lines 291-296
 cat('Fitting a ppm to', species_names[i],'\nThis is the', i,'^th model of',length(species_names),'\n')
 logfile <- paste0("./ppm_log_",gsub(" ","_",species_names[i]),"_",gsub("-", "", Sys.Date()), ".txt")
 writeLines(c(""), logfile)
@@ -286,14 +288,14 @@ if (!(nk < 20)) {
   }
   
   ## Fit ppm & save output
-  cat(paste("\nFitting ppm model for",i , " @ ", Sys.time(), "\n"), 
-      file = logfile, append = T)
-  cat(paste("   # original records for",i , " = ", dim(spxy)[1], "\n"), 
-      file = logfile, append = T)
-  cat(paste("   # extracted records for",i , " = ", dim(spxyz)[1], "\n"), 
-      file = logfile, append = T)
-  
-  mod <- try(ppmlasso(formula = ppmform, data = ppmxyz, n.fits = n.fits, 
+  # cat(paste("\nFitting ppm model for",i , " @ ", Sys.time(), "\n"), 
+  #     file = logfile, append = T)
+  # cat(paste("   # original records for",i , " = ", dim(spxy)[1], "\n"), 
+  #     file = logfile, append = T)
+  # cat(paste("   # extracted records for",i , " = ", dim(spxyz)[1], "\n"), 
+  #     file = logfile, append = T)
+
+  mod <- try(ppmlasso(formula = ppmform, data = ppmxyz, n.fits = n.fits,
                       criterion = "bic", standardise = FALSE), silent=TRUE)
   
   gc()
@@ -324,5 +326,5 @@ predmu$rcp26 <- predict.ppmlasso(mod, newdata = preddat)
 # predmu <- 1-exp(-predmu) ## gives relative probabilities
 
 ## Check & save output
-predmu
+str(predmu)
 saveRDS(predmu, file = paste0("./PRED_", gsub(" ", "_", tolower(species_names[i]))))
